@@ -439,11 +439,45 @@ static void init(void)
 	select_interface(0);
 }
 
+extern __code BYTE serial_num;
+extern __code BYTE dev_strings_end;
+
+/* use unique ID of FX2 as serial number, see KBA89285 */
+void init_serial_num(void)
+{
+	BYTE i, uid_pos = 0;
+	BYTE __xdata *snbuf = (BYTE __xdata *)&serial_num;
+	BYTE __xdata *uniqid = (BYTE __xdata *)&UNIQID0;
+	BYTE len = &dev_strings_end - &serial_num;
+
+	const char h2a[16] = { '0', '1', '2', '3', '4', '5', '6', '7',
+			       '8', '9', 'A', 'B', 'C', 'D', 'E', 'F' };
+
+	/* search for ':' delimiter */
+	for (i = 0; i < (len - 24); i += 2) {
+		if (snbuf[i] == ':') {
+			uid_pos = i + 4;
+			break;
+		}
+	}
+
+	if (!uid_pos)
+		return;
+
+	/* fill in UID */
+	for (i = 0; i < 6; i++) {
+		snbuf[uid_pos + 2] = h2a[uniqid[5 - i] >> 4];
+		snbuf[uid_pos] = h2a[uniqid[5 - i] & 0x0f];
+		uid_pos += 4;
+	}
+}
+
 static void main(void)
 {
 	/* Save energy. */
 	SETCPUFREQ(CLK_12M);
 
+	init_serial_num();
 	init();
 
 	/* Set up interrupts. */

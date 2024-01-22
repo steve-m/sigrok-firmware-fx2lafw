@@ -22,6 +22,8 @@ PID = 0x8e60	; Product ID (0x608e)
 VER = 0x0400	; Product "version". 0x0004 == YiXingDianZi MDSO.
 
 .include "dscr_scope.inc"
-string_descriptor_a 3,^"YiXingDianZi MDSO"
+.globl _serial_num
+_serial_num:
+string_descriptor_a 3,^"YiXingDianZi MDSO S/N: 000000000000"
 _dev_strings_end:
 	.dw	0x0000

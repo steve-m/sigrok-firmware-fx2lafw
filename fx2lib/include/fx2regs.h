@@ -252,6 +252,14 @@ __xdata __at 0xE62D volatile BYTE ECC2B0;  ///< ECC2 Byte 0
 __xdata __at 0xE62E volatile BYTE ECC2B1;  ///< ECC2 Byte 1
 __xdata __at 0xE62F volatile BYTE ECC2B2;  ///< ECC2 Byte 2
 
+// ID Registers that provide a unique serial number -> Cypress KBA89285
+__xdata __at 0xE507 volatile BYTE UNIQID0;  // ID register byte 0 (LSB)
+__xdata __at 0xE508 volatile BYTE UNIQID1;  // ID register
+__xdata __at 0xE509 volatile BYTE UNIQID2;  // ID register
+__xdata __at 0xE50A volatile BYTE UNIQID3;  // ID register
+__xdata __at 0xE50B volatile BYTE UNIQID4;  // ID register
+__xdata __at 0xE50C volatile BYTE UNIQID5;  // ID register byte 5 (MSB)
+
 // Feature Registers  (FX2LP/FX1 only)
 __xdata __at 0xE50D volatile BYTE GPCR2;  ///< Chip Features
 

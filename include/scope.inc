@@ -18,6 +18,8 @@
  * License along with this library; if not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <i2c.h>
+
 #define OE_CTL (((1 << CTL_BIT) << 4) | (1 << CTL_BIT)) /* OEx = CTLx = 1 */
 
 static BOOL set_voltage(BYTE channel, BYTE val);
@@ -34,6 +36,8 @@ struct samplerate_info {
 
 /* Change to support as many interfaces as you need. */
 static BYTE altiface = 0;
+static BOOL use_external_clock = FALSE;
+static BYTE last_rate = 0;
 
 static volatile WORD ledcounter = 0;
 
@@ -188,13 +192,20 @@ static BOOL set_samplerate(BYTE rate)
 {
 	BYTE i = 0;
 
-	while (samplerates[i].rate != rate) {
-		i++;
-		if (i == sizeof(samplerates) / sizeof(samplerates[0]))
-			return FALSE;
+	if (!use_external_clock) {
+		while (samplerates[i].rate != rate) {
+			i++;
+			if (i == sizeof(samplerates) / sizeof(samplerates[0]))
+				return FALSE;
+		}
+		IFCONFIG = samplerates[i].ifcfg;
+	} else {
+		/* use highest sample rate using single instruction loop */
+		i = 0;
+		/* use external clock, IFLCK not driven as output */
+		IFCONFIG = 0x4a;
 	}
 
-	IFCONFIG = samplerates[i].ifcfg;
 
 	AUTOPTRSETUP = 7;
 	AUTOPTRH2 = 0xE4; /* 0xE400: GPIF waveform descriptor 0. */
@@ -324,16 +335,46 @@ BOOL handle_set_configuration(BYTE cfg)
 	return TRUE;
 }
 
+static void handle_i2c_read(void)
+{
+	BYTE *p = (BYTE *)EP0BUF;
+
+	/* I2C addr */
+	WORD wValue = SETUP_VALUE();
+	WORD wLength = SETUP_LENGTH();
+
+	BOOL ret = i2c_read(wValue & 0xff, wLength, p);
+	p[0] = ret ? 0 : 1;
+
+	/* Send the message. */
+	EP0BCH = 0;
+	SYNCDELAY4;
+	EP0BCL = ret ? (wLength & 0xff) : 0;
+	SYNCDELAY4;
+}
+
+static BOOL handle_i2c_write(void)
+{
+	/* I2C addr */
+	WORD wValue = SETUP_VALUE();
+	WORD wLength = SETUP_LENGTH();
+	BYTE *p = (BYTE *)EP0BUF;
+
+	return i2c_write(wValue & 0xff, 0, NULL, wLength, p);
+}
+
 BOOL handle_vendorcommand(BYTE cmd)
 {
-	stop_sampling();
+	if (cmd < 0xe8) {
+		stop_sampling();
 
-	/* Set red LED, clear after timeout. */
-	LED_RED();
-	ledcounter = 1000;
+		/* Set red LED, clear after timeout. */
+		LED_RED();
+		ledcounter = 1000;
+	}
 
 	/* Clear EP0BCH/L for each valid command. */
-	if (cmd >= 0xe0 && cmd <= 0xe6) {
+	if (cmd >= 0xe0 && cmd <= 0xe8) {
 		EP0BCH = 0;
 		EP0BCL = 0;
 		while (EP0CS & bmEPBUSY);
@@ -359,6 +400,17 @@ BOOL handle_vendorcommand(BYTE cmd)
 		return TRUE;
 	case 0xe6:
 		SET_CALIBRATION_PULSE(EP0BUF[0]);
+		return TRUE;
+	case 0xe7:
+		use_external_clock = EP0BUF[0] ? TRUE : FALSE;
+		if (use_external_clock)
+			set_samplerate(0);
+		return TRUE;
+	case 0xe8:
+		handle_i2c_write();
+		return TRUE;
+	case 0xe9:
+		handle_i2c_read();
 		return TRUE;
 	}
 
